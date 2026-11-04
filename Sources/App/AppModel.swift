@@ -15,6 +15,32 @@ final class AppModel: TVDriverDelegate {
     var showingKeyboard = false
     var showingApps = false
     var showingSettings = false
+    private(set) var remoteControlMode: RemoteControlMode = .standard
+    private let remoteModes = RemoteModePreferences()
+
+    var remoteInputAvailable: Bool {
+        inputAvailability.allowsGestures
+    }
+
+    var remoteCommandsAvailable: Bool {
+        inputAvailability.allowsCommands
+    }
+
+    private var inputAvailability: RemoteInputAvailability {
+        RemoteInputAvailability(state: state, showingDevices: showingDevices,
+                                showingKeyboard: showingKeyboard, showingApps: showingApps,
+                                showingSettings: showingSettings)
+    }
+
+    var availableRemoteModes: [RemoteControlMode] { RemoteControlMode.allCases }
+
+    func selectRemoteMode(_ mode: RemoteControlMode) {
+        remoteControlMode = mode
+        #if DEBUG
+        if DemoMode.isEnabled { return }
+        #endif
+        remoteModes.save(mode, for: currentID)
+    }
 
     let discovery = Discovery()
     let jellyfin = JellyfinStore()
@@ -34,6 +60,9 @@ final class AppModel: TVDriverDelegate {
             driver.delegate = self
             self.driver = driver
             state = .connected
+            if UserDefaults.standard.bool(forKey: "demoEyesFree") { remoteControlMode = .eyesFree }
+            else if let raw = UserDefaults.standard.string(forKey: "padMode"),
+                    let mode = RemoteControlMode(rawValue: raw) { remoteControlMode = mode }
             switch DemoMode.sheet {
             case "apps": showingApps = true
             case "devices": showingDevices = true
@@ -68,15 +97,7 @@ final class AppModel: TVDriverDelegate {
         guard let shared = DeviceStore.loadShared() else { return }
         let mine = devices
         let previous = current
-        devices = shared.map { tv in
-            guard let local = mine.first(where: { $0.id == tv.id })
-                ?? mine.first(where: { $0.brand == tv.brand && $0.name == tv.name }) else { return tv }
-            var tv = tv
-            tv.token = local.token
-            tv.isPaired = local.isPaired
-            tv.macAddress = tv.macAddress ?? local.macAddress
-            return tv
-        }
+        devices = TVDeviceSync.merge(shared, preserving: mine, modes: remoteModes)
         DeviceStore.save(devices)
         guard let previous, current == nil else { return }
         if let moved = devices.first(where: { $0.brand == previous.brand && $0.name == previous.name }) {
@@ -97,12 +118,14 @@ final class AppModel: TVDriverDelegate {
     }
 
     func forget(_ device: TVDevice) {
+        remoteModes.forget(device.id)
         devices.removeAll { $0.id == device.id }
         DeviceStore.save(devices)
         if device.id == currentID {
             driver?.disconnect()
             driver = nil
             currentID = nil
+            remoteControlMode = .standard
             DeviceStore.currentID = nil
             state = .idle
             installedApps = nil
@@ -122,6 +145,8 @@ final class AppModel: TVDriverDelegate {
         driver.delegate = self
         self.driver = driver
         state = driver.state
+        remoteModes.migrateLegacy(for: device.id)
+        remoteControlMode = remoteModes.mode(for: device.id)
         driver.connect()
     }
 
@@ -191,6 +216,7 @@ final class AppModel: TVDriverDelegate {
             devices.append(moved)
         }
         DeviceStore.save(devices)
+        remoteModes.move(from: device.id, to: moved.id)
         activate(moved)
     }
 
@@ -206,7 +232,23 @@ final class AppModel: TVDriverDelegate {
 
     // MARK: Commands
 
+    #if DEBUG
+    private(set) var demoInputCount = 0
+    private(set) var demoLastInput = "None"
+    #endif
+
     func press(_ key: RemoteKey) { driver?.send(key) }
+
+    func pressInteractively(_ key: RemoteKey, request: RemoteInputRequest) async {
+        guard state == .connected, !request.isCancelled, !Task.isCancelled else { return }
+        #if DEBUG
+        if DemoMode.isEnabled {
+            demoInputCount += 1
+            demoLastInput = key.accessibilityName
+        }
+        #endif
+        await driver?.sendInteractive(key, request: request)
+    }
 
     func supports(_ key: RemoteKey) -> Bool { driver?.supports(key) ?? true }
 

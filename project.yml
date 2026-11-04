@@ -50,3 +50,28 @@ targets:
         CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: Resources/OpenRemote-macOS.entitlements
         CODE_SIGN_ENTITLEMENTS[sdk=iphone*]: Resources/OpenRemote-iOS.entitlements
         ENABLE_HARDENED_RUNTIME[sdk=macosx*]: YES
+
+  OpenRemoteUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [UITests]
+    dependencies:
+      - target: OpenRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.natebutler.freeremote.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: OpenRemote
+schemes:
+  OpenRemote:
+    build:
+      targets:
+        OpenRemote: all
+  OpenRemoteEyesFreeQA:
+    build:
+      targets:
+        OpenRemote: all
+    test:
+      config: Debug
+      targets: [OpenRemoteUITests]

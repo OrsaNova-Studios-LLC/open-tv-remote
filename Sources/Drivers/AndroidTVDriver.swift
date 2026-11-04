@@ -290,6 +290,16 @@ final class AndroidTVDriver: TVDriver {
         remote.send(m)
     }
 
+    func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async {
+        guard state == .connected, !request.isCancelled, !Task.isCancelled, let code = Self.keyCode(key), let remote else { return }
+        var message = ProtoWriter()
+        message.message(10) { key in
+            key.uint(1, UInt64(code))
+            key.uint(2, 3)
+        }
+        await remote.sendAndWait(message)
+    }
+
     func sendText(_ text: String) {
         guard !text.isEmpty, state == .connected else { return }
         let cursor = text.count - 1

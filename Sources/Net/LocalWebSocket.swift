@@ -10,6 +10,7 @@ final class LocalWebSocket {
     private let task: URLSessionWebSocketTask
     private let observer: Observer
     private var closed = false
+    private(set) var isReady = false
 
     init(url: URL) {
         observer = Observer()
@@ -32,9 +33,20 @@ final class LocalWebSocket {
         send(String(decoding: data, as: UTF8.self))
     }
 
+    func sendAndWait(_ text: String) async {
+        guard isReady, !closed, !Task.isCancelled else { return }
+        try? await task.send(.string(text))
+    }
+
+    func sendAndWait(json: [String: Any]) async {
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else { return }
+        await sendAndWait(String(decoding: data, as: UTF8.self))
+    }
+
     func close() {
         guard !closed else { return }
         closed = true
+        isReady = false
         onClose = nil
         task.cancel(with: .goingAway, reason: nil)
     }
@@ -59,11 +71,12 @@ final class LocalWebSocket {
         }
     }
 
-    fileprivate func opened() { onOpen?() }
+    fileprivate func opened() { isReady = true; onOpen?() }
 
     fileprivate func finish(_ error: Error?) {
         guard !closed else { return }
         closed = true
+        isReady = false
         onClose?(error)
     }
 

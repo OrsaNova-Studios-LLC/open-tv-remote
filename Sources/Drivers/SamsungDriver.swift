@@ -145,6 +145,14 @@ final class SamsungDriver: TVDriver {
         sendKey(name)
     }
 
+    func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async {
+        guard state == .connected, !request.isCancelled, !Task.isCancelled, let name = Self.keyName(key), let socket else { return }
+        await socket.sendAndWait(json: [
+            "method": "ms.remote.control",
+            "params": ["Cmd": "Click", "DataOfCmd": name, "Option": "false", "TypeOfRemote": "SendRemoteKey"],
+        ])
+    }
+
     private func sendKey(_ name: String) { sendKey(name, cmd: "Click") }
 
     private func sendKey(_ name: String, cmd: String) {

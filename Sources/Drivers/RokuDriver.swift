@@ -12,15 +12,20 @@ final class RokuDriver: TVDriver {
     private var base: URL { URL(string: "http://\(device.host):8060")! }
     /// Keypresses must arrive in order, so they go through one serial chain.
     private var queue: Task<Void, Never>?
+    private var generation = 0
 
     init(device: TVDevice) {
         self.device = device
     }
 
     func connect() {
+        generation += 1
         state = .connecting
+        let token = generation
         Task {
-            guard let data = await LocalHTTP.get(base.appending(path: "query/device-info"), timeout: 4) else {
+            let data = await LocalHTTP.get(base.appending(path: "query/device-info"), timeout: 4)
+            guard token == generation else { return }
+            guard let data else {
                 state = .failed("Couldn't reach the Roku. Is it on and on the same Wi-Fi?")
                 return
             }
@@ -38,6 +43,7 @@ final class RokuDriver: TVDriver {
     func submitPairingCode(_ code: String) {}
 
     func disconnect() {
+        generation += 1
         queue?.cancel()
         state = .idle
     }
@@ -47,6 +53,17 @@ final class RokuDriver: TVDriver {
     func send(_ key: RemoteKey) {
         guard let name = Self.keyName(key) else { return }
         enqueue("keypress/\(name)")
+    }
+
+    func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async {
+        guard state == .connected, !request.isCancelled, !Task.isCancelled,
+              let name = Self.keyName(key) else { return }
+        let operation = enqueue("keypress/" + name, request: request)
+        await withTaskCancellationHandler {
+            await operation.value
+        } onCancel: {
+            operation.cancel()
+        }
     }
 
     func sendText(_ text: String) {
@@ -67,16 +84,23 @@ final class RokuDriver: TVDriver {
         }
     }
 
-    private func enqueue(_ path: String) {
+    @discardableResult
+    private func enqueue(_ path: String, request: RemoteInputRequest? = nil) -> Task<Void, Never> {
         let previous = queue
+        let token = generation
         // Percent-encoded paths must not be re-encoded by appending(path:).
         let url = URL(string: base.absoluteString + "/" + path)!
-        queue = Task { [weak self] in
+        let operation = Task { @MainActor [weak self] in
             await previous?.value
-            let status = await LocalHTTP.post(url, timeout: 3)
-            guard let self else { return }
+            guard let self, !Task.isCancelled, token == self.generation else { return }
+            if let request {
+                guard !request.isCancelled, self.state == .connected else { return }
+            }
+            let status = await LocalHTTP.post(url, timeout: request == nil ? 3 : 2)
+            guard !Task.isCancelled, token == self.generation else { return }
             switch status {
             case 200?, 202?, 204?:
+                guard request?.isCancelled != true else { return }
                 if self.state != .connected { self.state = .connected }
             case 403?:
                 self.state = .failed("Your Roku is blocking remote apps. On the Roku, go to Settings → System → Advanced system settings → Control by mobile apps and set Network access to Default or Permissive.")
@@ -86,6 +110,8 @@ final class RokuDriver: TVDriver {
                 break
             }
         }
+        queue = operation
+        return operation
     }
 
     private static func keyName(_ key: RemoteKey) -> String? {

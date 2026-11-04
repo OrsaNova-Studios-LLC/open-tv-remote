@@ -2,42 +2,28 @@ import SwiftUI
 
 struct RemoteScreen: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("padMode") private var mode: PadMode = .dpad
+    private var mode: PadMode {
+        switch model.remoteControlMode {
+        case .keyboard: .keyboard
+        case .keypad: .keypad
+        default: .dpad
+        }
+    }
     @FocusState private var focused: Bool
 
     var body: some View {
-        GeometryReader { geo in
-            // Size the pad to whatever's left so the remote fits without scrolling on every
-            // phone — a scroll that starts on a key would otherwise press it.
-            let compact = geo.size.height < 760
-            let spacing: CGFloat = compact ? 10 : 18
-            let fixed: CGFloat = 48 + 54 + 192 + spacing * 4 + 28 + PageSwitcher.height
-            // The keyboard has too many keys to share the screen, so it takes the controls' space too.
-            let padHeight = mode == .keyboard
-                ? max(300, geo.size.height - (fixed - 192 - spacing) - 8)
-                : min(340, max(170, geo.size.height - fixed - 8))
-            ScrollView {
-                VStack(spacing: spacing) {
-                    TopBar()
-                    StatusBanner()
-                    navRow
-                    pad
-                        .frame(height: padHeight)
-                        .overlay(alignment: .bottomTrailing) {
-                            // The round D-pad leaves its corners free.
-                            if mode == .dpad { SettingsButton() }
-                        }
-                        .padding(.vertical, 4)
-                    if mode != .keyboard { controls }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 20)
-                .frame(maxWidth: 440)
-                .frame(maxWidth: .infinity, minHeight: geo.size.height)
+        VStack(spacing: 12) {
+            TopBar()
+            StatusBanner()
+            switch model.remoteControlMode {
+            case .standard, .keyboard, .keypad: standardMode
+            case .eyesFree: JoystickScreen()
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.background.ignoresSafeArea())
         .focusable()
         .focusEffectDisabled()
@@ -46,15 +32,38 @@ struct RemoteScreen: View {
         .onAppear { focused = true }
     }
 
-    private var navRow: some View {
-        HStack(spacing: 12) {
-            RemoteKeyButton(key: .back, symbol: "arrow.uturn.backward")
-                .frame(width: 58)
-            ModePicker(mode: $mode)
-            RemoteKeyButton(key: .home, symbol: "house.fill")
-                .frame(width: 58)
+    private var standardMode: some View {
+        RemoteModeLayout { navRow } controls: { standardControls }
+    }
+
+    private var standardControls: some View {
+        GeometryReader { geo in
+            let spacing: CGFloat = geo.size.height < 620 ? 10 : 18
+            let fixed: CGFloat = 192 + spacing * 2 + 28
+            let padHeight = mode == .keyboard
+                ? max(300, geo.size.height - (fixed - 192 - spacing))
+                : min(340, max(170, geo.size.height - fixed))
+            ScrollView {
+                VStack(spacing: spacing) {
+                    pad
+                        .frame(height: padHeight)
+                        .padding(.vertical, 4)
+                    if mode != .keyboard { controls }
+                }
+                .padding(.bottom, 20)
+                .frame(maxWidth: 440)
+                .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .frame(height: 54)
+    }
+
+    private var navRow: some View {
+        RemoteNavigationRow(selection: Binding(get: { model.remoteControlMode }, set: {
+            Haptics.tap()
+            model.selectRemoteMode($0)
+        }), modes: model.availableRemoteModes, enabled: model.remoteCommandsAvailable,
+        back: { model.press(.back) }, home: { model.press(.home) })
     }
 
     @ViewBuilder private var pad: some View {
@@ -93,6 +102,7 @@ struct RemoteScreen: View {
 
     /// Hardware keyboard control (Mac, or iPad with a keyboard).
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        guard model.remoteCommandsAvailable else { return .ignored }
         if mode == .keyboard, let result = typeKey(press) { return result }
         let key: RemoteKey? = switch press.key {
         case .upArrow: .up
@@ -183,6 +193,8 @@ private struct TopBar: View {
                 Image(systemName: "keyboard").font(.system(size: 16, weight: .semibold))
             }
             .frame(width: 48, height: 48)
+
+            SettingsButton().frame(width: 48, height: 48)
         }
     }
 }
@@ -266,39 +278,6 @@ private struct StatusBanner: View {
 }
 
 // MARK: - Pieces
-
-private struct ModePicker: View {
-    @Binding var mode: PadMode
-    @Namespace private var ns
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(PadMode.allCases) { m in
-                Button {
-                    Haptics.tap()
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) { mode = m }
-                } label: {
-                    Image(systemName: m.symbol)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(mode == m ? Color.black : Theme.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background {
-                            if mode == m {
-                                Capsule().fill(Theme.accent).matchedGeometryEffect(id: "sel", in: ns)
-                            }
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(m.title)
-                .accessibilityAddTraits(mode == m ? .isSelected : [])
-            }
-        }
-        .padding(5)
-        .background(Capsule().fill(Theme.well))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.05), lineWidth: 1))
-    }
-}
 
 private struct Rocker: View {
     @Environment(AppModel.self) private var model

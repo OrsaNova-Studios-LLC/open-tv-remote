@@ -19,6 +19,8 @@ enum Haptics {
     #if os(iOS)
     private static let light = UIImpactFeedbackGenerator(style: .light)
     private static let rigid = UIImpactFeedbackGenerator(style: .rigid)
+    private static let firm = UIImpactFeedbackGenerator(style: .medium)
+    private static let repeatPulse = UIImpactFeedbackGenerator(style: .light)
     #endif
 
     static func tap() {
@@ -30,6 +32,22 @@ enum Haptics {
     static func tick() {
         #if os(iOS)
         rigid.impactOccurred(intensity: 0.6)
+        #endif
+    }
+
+    static func joystickStart() {
+        #if os(iOS)
+        firm.impactOccurred(intensity: 0.8)
+        repeatPulse.prepare()
+        #endif
+    }
+
+    static func joystickRepeat() {
+        #if os(iOS)
+        // Use the standard light impact at its normal strength: gentler than the
+        // medium start, but more distinct than a low-intensity soft waveform.
+        repeatPulse.impactOccurred()
+        repeatPulse.prepare()
         #endif
     }
 }

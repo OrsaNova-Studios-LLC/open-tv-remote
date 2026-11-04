@@ -80,10 +80,30 @@ struct RootView: View {
 
 /// The remote and the Watch page side by side; swipe (or use the switcher) to move between them.
 private struct Pager: View {
+    @Environment(AppModel.self) private var model
     @AppStorage("page") private var stored = 0
     @State private var page: Int? = 0
 
     var body: some View {
+        Group {
+            if model.remoteControlMode.isGestureMode && (page ?? 0) == 0 {
+                RemoteScreen()
+            } else {
+                pages
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !model.remoteControlMode.isGestureMode || (page ?? 0) != 0 {
+                PageSwitcher(page: Binding { page ?? 0 } set: { new in withAnimation(.snappy) { page = new } })
+            }
+        }
+        .background(Theme.background.ignoresSafeArea())
+        .onAppear { page = stored }
+        .onChange(of: page) { _, new in if let new { stored = new } }
+        .onChange(of: stored) { _, new in if page != new { page = new } }
+    }
+
+    private var pages: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 RemoteScreen()
@@ -99,12 +119,7 @@ private struct Pager: View {
         .scrollPosition(id: $page)
         .scrollIndicators(.hidden)
         .scrollBounceBehavior(.basedOnSize)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            PageSwitcher(page: Binding { page ?? 0 } set: { new in withAnimation(.snappy) { page = new } })
-        }
-        .background(Theme.background.ignoresSafeArea())
-        .onAppear { page = stored }
-        .onChange(of: page) { _, new in if let new { stored = new } }
+
     }
 }
 

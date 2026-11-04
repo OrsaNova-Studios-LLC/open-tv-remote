@@ -196,6 +196,41 @@ final class LGDriver: TVDriver {
         }
     }
 
+    func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async {
+        guard state == .connected, !request.isCancelled, !Task.isCancelled,
+              let name = Self.buttonName(key), let controlSocket = socket else { return }
+        let deliberate = key == .select || key == .back || key == .home
+        let deadline = ContinuousClock.now + .seconds(4)
+        var requestedPointer = false
+        var discardRecoveryDirection = false
+        while state == .connected, socket === controlSocket, !request.isCancelled, !Task.isCancelled {
+            if let pointer {
+                if pointer.isReady {
+                    guard !discardRecoveryDirection else { return }
+                    await pointer.sendAndWait("type:button\nname:\(name)\n\n")
+                    return
+                }
+            } else {
+                if !deliberate { discardRecoveryDirection = true }
+                if !requestedPointer {
+                    openPointerSocket()
+                    requestedPointer = true
+                }
+                // Movement also waits through bounded acquisition, but its
+                // recovery-triggering key is discarded when the channel becomes ready.
+            }
+            // Keep valid one-shots through channel creation/handshake. Lift cancels
+            // movement; lifecycle/session cancellation also invalidates one-shots.
+            guard ContinuousClock.now < deadline else {
+                // Make navigation unavailable without erasing credentials or reporting
+                // a failed primary address, which would trigger network rediscovery.
+                disconnect()
+                return
+            }
+            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+        }
+    }
+
     private func button(_ name: String) {
         if let pointer {
             pointer.send("type:button\nname:\(name)\n\n")

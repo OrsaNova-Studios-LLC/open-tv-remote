@@ -55,6 +55,8 @@ protocol TVDriver: AnyObject {
 
     func supports(_ key: RemoteKey) -> Bool
     func send(_ key: RemoteKey)
+    /// Await transport completion; discard invalidated input instead of replaying it.
+    func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async
     func sendText(_ text: String)
     /// Whether text sent a piece at a time is appended on the TV, so the keyboard pad can type live.
     var typesLive: Bool { get }
@@ -65,4 +67,8 @@ protocol TVDriver: AnyObject {
 
 extension TVDriver {
     var typesLive: Bool { true }
+    func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async {
+        guard !request.isCancelled, !Task.isCancelled else { return }
+        send(key)
+    }
 }

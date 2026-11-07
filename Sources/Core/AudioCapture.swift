@@ -1,5 +1,8 @@
 import Foundation
 import AVFAudio
+#if os(macOS)
+import AVFoundation
+#endif
 
 /// Captures microphone audio as 16-bit little-endian PCM at a specified sample rate.
 @MainActor

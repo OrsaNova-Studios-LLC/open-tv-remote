@@ -13,6 +13,9 @@ final class RokuDriver: TVDriver {
     /// Keypresses must arrive in order, so they go through one serial chain.
     private var queue: Task<Void, Never>?
     private var generation = 0
+    
+    private var audioSession: RokuAudioSession?
+    private(set) var isPrivateListeningActive = false
 
     init(device: TVDevice) {
         self.device = device
@@ -45,6 +48,7 @@ final class RokuDriver: TVDriver {
     func disconnect() {
         generation += 1
         queue?.cancel()
+        stopPrivateListening()
         state = .idle
     }
 
@@ -81,6 +85,37 @@ final class RokuDriver: TVDriver {
         guard let data = await LocalHTTP.get(base.appending(path: "query/apps")) else { return nil }
         return RokuAppsParser.parse(data).map {
             TVApp(name: $0.name, launchID: $0.id, iconURL: base.appending(path: "query/icon/\($0.id)"))
+        }
+    }
+    
+    var supportsPrivateListening: Bool { true }
+    
+    func startPrivateListening() async throws {
+        guard !isPrivateListeningActive else { return }
+        
+        let session = RokuAudioSession(host: device.host)
+        session.onError = { [weak self] error in
+            Task { @MainActor in
+                self?.handleAudioError(error)
+            }
+        }
+        
+        try await session.start()
+        audioSession = session
+        isPrivateListeningActive = true
+    }
+    
+    func stopPrivateListening() {
+        guard isPrivateListeningActive else { return }
+        audioSession?.stop()
+        audioSession = nil
+        isPrivateListeningActive = false
+    }
+    
+    private func handleAudioError(_ message: String) {
+        stopPrivateListening()
+        if state == .connected {
+            state = .failed(message)
         }
     }
 

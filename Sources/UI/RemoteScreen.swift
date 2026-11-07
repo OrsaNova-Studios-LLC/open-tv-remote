@@ -94,7 +94,11 @@ struct RemoteScreen: View {
                 RemoteKeyButton(key: .rewind, symbol: "backward.fill", repeats: true)
                 RemoteKeyButton(key: .playPause, symbol: "playpause.fill")
                 RemoteKeyButton(key: .fastForward, symbol: "forward.fill", repeats: true)
-                RemoteKeyButton(key: .mute, symbol: "speaker.slash.fill")
+                if model.supportsVoice {
+                    MicButton()
+                } else {
+                    RemoteKeyButton(key: .mute, symbol: "speaker.slash.fill")
+                }
             }
             .frame(height: 56)
         }
@@ -379,5 +383,42 @@ struct PressScaleStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .animation(.spring(response: 0.18, dampingFraction: 0.65), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Mic button
+
+private struct MicButton: View {
+    @Environment(AppModel.self) private var model
+    @GestureState private var isHolding = false
+    
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        ZStack {
+            KeySurface(shape: shape)
+            Image(systemName: model.isRecordingVoice ? "mic.fill" : "mic")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(model.isRecordingVoice ? Theme.accent : Theme.label)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(shape.strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.45), radius: 6, y: 3)
+        .gesture(
+            LongPressGesture(minimumDuration: 0)
+                .updating($isHolding) { value, state, _ in
+                    state = value
+                }
+                .onEnded { _ in }
+        )
+        .onChange(of: isHolding) { _, holding in
+            if holding {
+                Task { await model.startVoice() }
+            } else {
+                model.stopVoice()
+            }
+        }
+        .accessibilityLabel("Hold to talk")
+        .accessibilityHint("Hold to send voice to your TV")
     }
 }

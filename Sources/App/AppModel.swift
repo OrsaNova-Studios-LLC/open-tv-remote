@@ -48,6 +48,8 @@ final class AppModel: TVDriverDelegate {
     @ObservationIgnored private var driver: TVDriver?
     @ObservationIgnored private var relocateTask: Task<Void, Never>?
     @ObservationIgnored private var relocationAttempted = false
+    
+    private(set) var isRecordingVoice = false
 
     var current: TVDevice? { devices.first { $0.id == currentID } }
 
@@ -341,6 +343,23 @@ final class AppModel: TVDriverDelegate {
         if let apps = await driver.installedApps() {
             installedApps = apps
         }
+    }
+
+    // MARK: Voice
+    
+    var supportsVoice: Bool { driver?.supportsVoice ?? false }
+    
+    func startVoice() async {
+        guard !isRecordingVoice, let driver else { return }
+        if await driver.startVoice() {
+            isRecordingVoice = true
+        }
+    }
+    
+    func stopVoice() {
+        guard isRecordingVoice else { return }
+        driver?.stopVoice()
+        isRecordingVoice = false
     }
 
     // MARK: TVDriverDelegate

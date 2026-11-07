@@ -26,6 +26,7 @@ targets:
         LSApplicationCategoryType: public.app-category.utilities
         ITSAppUsesNonExemptEncryption: false
         NSLocalNetworkUsageDescription: Open Remote talks to TVs on your Wi-Fi network so it can control them.
+        NSMicrophoneUsageDescription: Open Remote needs microphone access to send voice commands to your Roku.
         NSBonjourServices:
           - _androidtvremote2._tcp
         NSAppTransportSecurity:

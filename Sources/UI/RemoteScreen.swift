@@ -94,7 +94,11 @@ struct RemoteScreen: View {
                 RemoteKeyButton(key: .rewind, symbol: "backward.fill", repeats: true)
                 RemoteKeyButton(key: .playPause, symbol: "playpause.fill")
                 RemoteKeyButton(key: .fastForward, symbol: "forward.fill", repeats: true)
-                RemoteKeyButton(key: .mute, symbol: "speaker.slash.fill")
+                if model.supportsPrivateListening {
+                    PrivateListeningButton()
+                } else {
+                    RemoteKeyButton(key: .mute, symbol: "speaker.slash.fill")
+                }
             }
             .frame(height: 56)
         }
@@ -379,5 +383,28 @@ struct PressScaleStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
             .animation(.spring(response: 0.18, dampingFraction: 0.65), value: configuration.isPressed)
+    }
+}
+
+private struct PrivateListeningButton: View {
+    @Environment(AppModel.self) private var model
+    
+    var body: some View {
+        KeyCap(
+            shape: RoundedRectangle(cornerRadius: 14, style: .continuous),
+            tint: model.isPrivateListeningActive ? Theme.accent : Theme.keyTop,
+            accessibilityLabel: model.isPrivateListeningActive ? "Stop Private Listening" : "Private Listening"
+        ) {
+            Haptics.tap()
+            if model.isPrivateListeningActive {
+                model.stopPrivateListening()
+            } else {
+                model.startPrivateListening()
+            }
+        } label: {
+            Image(systemName: model.isPrivateListeningActive ? "headphones" : "speaker.wave.2.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(model.isPrivateListeningActive ? .black : Theme.label)
+        }
     }
 }

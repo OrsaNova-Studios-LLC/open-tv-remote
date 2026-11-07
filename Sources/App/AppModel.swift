@@ -10,6 +10,7 @@ final class AppModel: TVDriverDelegate {
     private(set) var installedApps: [TVApp]?
     /// True while we search the network for a saved TV that stopped answering at its old address.
     private(set) var isRelocating = false
+    private(set) var isPrivateListeningActive = false
 
     var showingDevices = false
     var showingKeyboard = false
@@ -50,6 +51,8 @@ final class AppModel: TVDriverDelegate {
     @ObservationIgnored private var relocationAttempted = false
 
     var current: TVDevice? { devices.first { $0.id == currentID } }
+    
+    var supportsPrivateListening: Bool { driver?.supportsPrivateListening ?? false }
 
     init() {
         #if DEBUG
@@ -175,6 +178,7 @@ final class AppModel: TVDriverDelegate {
     /// returning would go into a dead connection. Drop it ourselves and reconnect on return.
     func sceneDidEnterBackground() {
         if case .pairing = state { return }
+        stopPrivateListening()
         driver?.disconnect()
     }
 
@@ -360,5 +364,24 @@ final class AppModel: TVDriverDelegate {
         guard let i = devices.firstIndex(where: { $0.id == device.id }) else { return }
         devices[i] = device
         DeviceStore.save(devices)
+    }
+    
+    // MARK: Private Listening
+    
+    func startPrivateListening() {
+        guard let driver, state == .connected else { return }
+        Task {
+            do {
+                try await driver.startPrivateListening()
+                isPrivateListeningActive = driver.isPrivateListeningActive
+            } catch {
+                state = .failed("Couldn't start private listening: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func stopPrivateListening() {
+        driver?.stopPrivateListening()
+        isPrivateListeningActive = false
     }
 }

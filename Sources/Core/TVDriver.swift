@@ -63,6 +63,15 @@ protocol TVDriver: AnyObject {
     func launch(_ app: TVApp)
     /// Apps installed on the TV, or nil if the protocol can't list them.
     func installedApps() async -> [TVApp]?
+    
+    /// Whether the TV supports streaming its audio to the app for private listening.
+    var supportsPrivateListening: Bool { get }
+    /// Whether private listening is currently active.
+    var isPrivateListeningActive: Bool { get }
+    /// Start streaming TV audio to this device.
+    func startPrivateListening() async throws
+    /// Stop streaming TV audio.
+    func stopPrivateListening()
 }
 
 extension TVDriver {
@@ -71,4 +80,9 @@ extension TVDriver {
         guard !request.isCancelled, !Task.isCancelled else { return }
         send(key)
     }
+    
+    var supportsPrivateListening: Bool { false }
+    var isPrivateListeningActive: Bool { false }
+    func startPrivateListening() async throws {}
+    func stopPrivateListening() {}
 }

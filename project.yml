@@ -39,6 +39,7 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        LSUIElement: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.natebutler.freeremote

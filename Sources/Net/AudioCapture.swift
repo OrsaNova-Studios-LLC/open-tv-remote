@@ -47,7 +47,7 @@ final class AudioCapture {
     }
     
     func start() throws {
-        guard state == .idle else { return }
+        guard case .idle = state else { return }
         
         let audioEngine = AVAudioEngine()
         let input = audioEngine.inputNode
@@ -81,7 +81,7 @@ final class AudioCapture {
     }
     
     func stop() {
-        guard state == .recording else { return }
+        guard case .recording = state else { return }
         inputNode?.removeTap(onBus: 0)
         engine?.stop()
         engine = nil
@@ -115,8 +115,8 @@ final class AudioCapture {
         let samples = UnsafeBufferPointer(start: channelData[0], count: frameLength)
         var data = Data(capacity: frameLength * 2)
         for sample in samples {
-            var littleEndian = sample.littleEndian
-            data.append(UnsafeBufferPointer(start: &littleEndian, count: 1))
+            let littleEndian = sample.littleEndian
+            withUnsafeBytes(of: littleEndian) { data.append(contentsOf: $0) }
         }
         
         buffer.append(data)

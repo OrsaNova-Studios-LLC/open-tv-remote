@@ -13,6 +13,9 @@ final class RokuDriver: TVDriver {
     /// Keypresses must arrive in order, so they go through one serial chain.
     private var queue: Task<Void, Never>?
     private var generation = 0
+    
+    private var voiceSession: RokuVoiceSession?
+    private var audioCapture: AudioCapture?
 
     init(device: TVDevice) {
         self.device = device
@@ -45,6 +48,7 @@ final class RokuDriver: TVDriver {
     func disconnect() {
         generation += 1
         queue?.cancel()
+        stopVoice()
         state = .idle
     }
 
@@ -82,6 +86,39 @@ final class RokuDriver: TVDriver {
         return RokuAppsParser.parse(data).map {
             TVApp(name: $0.name, launchID: $0.id, iconURL: base.appending(path: "query/icon/\($0.id)"))
         }
+    }
+    
+    var supportsVoice: Bool { true }
+    
+    func startVoice() async throws {
+        guard state == .connected else { return }
+        guard audioCapture == nil else { return }
+        
+        let granted = await AudioCapture.requestPermission()
+        guard granted else {
+            throw AudioCaptureError.permissionDenied
+        }
+        
+        let session = RokuVoiceSession(host: device.host)
+        try await session.open()
+        voiceSession = session
+        
+        let capture = AudioCapture(sampleRate: 16000)
+        audioCapture = capture
+        
+        try capture.start { [weak self, weak session] data in
+            guard let session else { return }
+            Task {
+                try? await session.sendVoiceData(data)
+            }
+        }
+    }
+    
+    func stopVoice() {
+        audioCapture?.stop()
+        audioCapture = nil
+        voiceSession?.close()
+        voiceSession = nil
     }
 
     @discardableResult

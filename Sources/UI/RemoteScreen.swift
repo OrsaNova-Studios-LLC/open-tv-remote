@@ -94,7 +94,11 @@ struct RemoteScreen: View {
                 RemoteKeyButton(key: .rewind, symbol: "backward.fill", repeats: true)
                 RemoteKeyButton(key: .playPause, symbol: "playpause.fill")
                 RemoteKeyButton(key: .fastForward, symbol: "forward.fill", repeats: true)
-                RemoteKeyButton(key: .mute, symbol: "speaker.slash.fill")
+                if model.supportsVoice {
+                    MicButton()
+                } else {
+                    RemoteKeyButton(key: .mute, symbol: "speaker.slash.fill")
+                }
             }
             .frame(height: 56)
         }

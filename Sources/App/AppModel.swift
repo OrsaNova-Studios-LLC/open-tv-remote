@@ -253,6 +253,16 @@ final class AppModel: TVDriverDelegate {
     func supports(_ key: RemoteKey) -> Bool { driver?.supports(key) ?? true }
 
     func sendText(_ text: String) { driver?.sendText(text) }
+    
+    var supportsVoice: Bool { driver?.supportsVoice ?? false }
+    
+    func startVoice() async throws {
+        try await driver?.startVoice()
+    }
+    
+    func stopVoice() {
+        driver?.stopVoice()
+    }
 
     // MARK: Keyboard pad
 

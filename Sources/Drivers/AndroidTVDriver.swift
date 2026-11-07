@@ -30,6 +30,9 @@ final class AndroidTVDriver: TVDriver {
     private var imeFieldCounter = 0
     /// Shown alongside the next code prompt (e.g. after a wrong code forces a fresh one).
     private var nextPairingError: String?
+    
+    private var voiceSessionID = 0
+    private var audioCapture: AudioCapture?
 
     /// PING | KEY | IME | POWER | VOLUME | APP_LINK
     private static let requestedFeatures = 1 | 2 | 4 | 32 | 64 | 512
@@ -52,6 +55,7 @@ final class AndroidTVDriver: TVDriver {
     func disconnect() {
         pendingKeys = []
         pendingLaunch = nil
+        stopVoice()
         remote?.onClose = nil
         remote?.cancel()
         remote = nil
@@ -333,6 +337,62 @@ final class AndroidTVDriver: TVDriver {
     }
 
     func installedApps() async -> [TVApp]? { nil }
+
+    var supportsVoice: Bool { true }
+
+    // MARK: Voice
+
+    func startVoice() async -> Bool {
+        guard state == .connected, let remote else { return false }
+        
+        let capture = AudioCapture()
+        guard await capture.checkPermission() else { return false }
+        
+        voiceSessionID += 1
+        let sessionID = voiceSessionID
+        
+        send(.search)
+        
+        try? await Task.sleep(for: .milliseconds(100))
+        
+        var begin = ProtoWriter()
+        begin.message(30) { voice in
+            voice.int(1, sessionID)
+        }
+        remote.send(begin)
+        
+        capture.onChunk = { [weak self, weak remote] data in
+            MainActor.assumeIsolated {
+                guard let self, self.voiceSessionID == sessionID, let remote else { return }
+                var payload = ProtoWriter()
+                payload.message(31) { voice in
+                    voice.int(1, sessionID)
+                    voice.data(2, Array(data))
+                }
+                remote.send(payload)
+            }
+        }
+        
+        do {
+            try capture.start()
+            audioCapture = capture
+            return true
+        } catch {
+            return false
+        }
+    }
+    
+    func stopVoice() {
+        guard let capture = audioCapture, let remote else { return }
+        capture.stop()
+        audioCapture = nil
+        
+        var end = ProtoWriter()
+        end.message(32) { voice in
+            voice.int(1, voiceSessionID)
+        }
+        remote.send(end)
+    }
 
     // MARK: Helpers
 

@@ -63,12 +63,22 @@ protocol TVDriver: AnyObject {
     func launch(_ app: TVApp)
     /// Apps installed on the TV, or nil if the protocol can't list them.
     func installedApps() async -> [TVApp]?
+    
+    /// Whether this driver supports hold-to-talk voice input.
+    var supportsVoice: Bool { get }
+    /// Start streaming voice to the TV. Returns false if permission was denied.
+    func startVoice() async -> Bool
+    /// Stop streaming voice to the TV.
+    func stopVoice()
 }
 
 extension TVDriver {
     var typesLive: Bool { true }
+    var supportsVoice: Bool { false }
     func sendInteractive(_ key: RemoteKey, request: RemoteInputRequest) async {
         guard !request.isCancelled, !Task.isCancelled else { return }
         send(key)
     }
+    func startVoice() async -> Bool { false }
+    func stopVoice() {}
 }

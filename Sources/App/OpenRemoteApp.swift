@@ -5,20 +5,22 @@ struct OpenRemoteApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup {
-            RootView()
+        #if os(macOS)
+        MenuBarExtra("Open Remote", systemImage: "av.remote") {
+            MenuBarRemoteView()
+                .environment(model)
+        }
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
         }
-        #if os(macOS)
-        .defaultSize(width: 420, height: 900)
-        .windowResizability(.contentMinSize)
-        #endif
-
-        #if os(macOS)
-        Settings {
-            SettingsView()
+        #else
+        WindowGroup {
+            RootView()
                 .environment(model)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
@@ -26,6 +28,60 @@ struct OpenRemoteApp: App {
         #endif
     }
 }
+
+#if os(macOS)
+struct MenuBarRemoteView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        VStack(spacing: 0) {
+            RootView()
+                .environment(model)
+                .preferredColorScheme(.dark)
+                .tint(Theme.accent)
+                .frame(idealWidth: 420, idealHeight: 900)
+        }
+        .background(Theme.background)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    openSettings()
+                } label: {
+                    Label("Settings", systemImage: "gear")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .contentShape(Capsule())
+                .keyboardShortcut(",", modifiers: .command)
+
+                Spacer()
+
+                Button {
+                    NSApplication.shared.terminate(nil)
+                } label: {
+                    Label("Quit", systemImage: "power")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.power)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .contentShape(Capsule())
+                .keyboardShortcut("q", modifiers: .command)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Theme.background.opacity(0.95))
+        }
+    }
+}
+#endif
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
